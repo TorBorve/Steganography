@@ -1,14 +1,20 @@
-steganography: main.o steg.o pngUtilities.o
-	g++ main.o steg.o pngUtilities.o -o steganography -lpng
+CXX := g++
+CXXFLAGS := ...
 
-main.o: main.cpp
-	g++ -c main.cpp
+SRC_DIR := src
+OBJ_DIR := obj
+SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
+OBJ_FILES := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC_FILES))
 
-steg.o: steg.cpp steg.h
-	g++ -c steg.cpp
+steganography: $(OBJ_FILES)
+	$(CXX) -o $@ $^ -lpng
 
-pngUtilities.o: pngUtilities.cpp pngUtilities.h
-	g++ -c pngUtilities.cpp
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp makeObjDir
+	$(CXX) -c -o $@ $<
+
+makeObjDir:
+	mkdir -p obj
 
 clean:
-	rm *.o steganography
+	rm steganography
+	rm -r obj
