@@ -5,6 +5,7 @@
 #include <fstream>
 #include <chrono>
 #include <thread>
+#include <string.h>
 
 #define timeSince(prev) \
     std::cout << "Line: " << __LINE__ << ", Time: " << \
@@ -40,9 +41,17 @@ namespace steg {
         return;
     }
 
+    void saveFile(const std::string& filename, const std::string& data){
+        std::ofstream outFile{filename, std::ios::out | std::ios::binary};
+        if (!outFile){
+            throw std::runtime_error{"could not create file: " + filename};
+        }
+        outFile.write(&data[0], data.size());
+    }
+
     namespace lsb {
         bool bigEnough(uint32_t height, uint32_t byteWidth, const std::string& text){
-            return height*byteWidth > text.size()*4;
+            return height*byteWidth > (text.size() + strlen(endSig))*4;
         }
 
         void encodeChar(const char& ch, png_byte** rowPointers, uint32_t byteWidth, int& x, int& y){
@@ -68,7 +77,9 @@ namespace steg {
             for (const char& ch : text){
                 encodeChar(ch, rowPointers, byteWidth, x, y);
             }
-            encodeChar('\0', rowPointers, byteWidth, x, y);
+            for (int i = 0; i < strlen(endSig); i++){
+                encodeChar(endSig[i], rowPointers, byteWidth, x, y);
+            }        
             return;
         }
 
@@ -91,6 +102,8 @@ namespace steg {
             png::close(&fp, &pngPtr, &infoPtr);
             // create new file for encoded picture
             png::create(encodedFilename(filename), width, height, bitDepth, colorType, &fp, &pngPtr, &infoPtr);
+            // png_set_compression_level(pngPtr, 0);
+            // png_set_filter(pngPtr, 0, 0);
             png_write_image(pngPtr, rowPointers);
             png_write_end(pngPtr, nullptr);
 
@@ -100,28 +113,39 @@ namespace steg {
 
         }
 
+        char decodeChar(png_byte** rowPointers, uint32_t height, uint32_t byteWidth, int& x, int& y){
+            char decodedChar = 0;
+            for (int i = 0; i < 4; i++){
+                constexpr unsigned char keep = 0b00000011;
+                int shift = 6 - 2*i;
+                decodedChar = ((rowPointers[y][x] & keep) << shift) | decodedChar;
+                if (x < byteWidth - 1){
+                    x++;
+                } else if (y == height - 1){
+                    throw std::runtime_error{"could not find end signature in file"};
+                } else {
+                    x = 0;
+                    y++;
+                }
+            }
+            return decodedChar;
+        }
+
         std::string decode(png_byte** rowPointers, uint32_t height, uint32_t byteWidth){
             std::string decodedText;
-            char decodedChar;;
+            std::string temp;
             int x = 0, y = 0;
-            do {
-                decodedChar = 0;
-                for (int i = 0; i < 4; i++){
-                    constexpr unsigned char keep = 0b00000011;
-                    int shift = 6 - 2*i;
-                    decodedChar = ((rowPointers[y][x] & keep) << shift) | decodedChar;
-                    if (x < byteWidth - 1){
-                        x++;
-                    } else if (y == height - 1){
-                        throw std::runtime_error{"could not find null terminating character in file"};
-                    } else {
-                        x = 0;
-                        y++;
-                    }
-                } 
-                decodedText += decodedChar;
-            } while (decodedChar != '\0');
-            decodedText.pop_back();
+            for (int indEndSig = 0; indEndSig < strlen(endSig);){
+                char decodedChar = decodeChar(rowPointers, height, byteWidth, x, y);
+                temp += decodedChar;
+                if (endSig[indEndSig] == decodedChar){
+                    indEndSig++;
+                } else {
+                    decodedText += temp;
+                    temp.clear();
+                    indEndSig = 0;
+                }
+            }
             return decodedText;
         }
 
