@@ -1,5 +1,6 @@
 CXX := g++
-CXXFLAGS := ...
+CXXFLAGS := -O3
+LDFLAGS := -lpng
 
 SRC_DIR := src
 OBJ_DIR := obj
@@ -7,10 +8,10 @@ SRC_FILES := $(wildcard $(SRC_DIR)/*.cpp)
 OBJ_FILES := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRC_FILES))
 
 steganography: $(OBJ_FILES)
-	$(CXX) -o $@ $^ -lpng
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp makeObjDir
-	$(CXX) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 makeObjDir:
 	mkdir -p obj
